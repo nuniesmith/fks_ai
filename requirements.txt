@@ -1,0 +1,21 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.9.0
+
+# LangChain/LangGraph for multi-agent system
+langchain>=0.3.0
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+langchain-ollama>=0.2.0
+
+# Ollama integration
+ollama>=0.3.0
+
+# Vector store & memory
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+
+# Utilities
+numpy>=1.26.0
+pandas>=2.2.0
