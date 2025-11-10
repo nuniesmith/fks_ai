@@ -36,6 +36,10 @@ from graph.trading_graph import analyze_symbol, trading_graph
 from memory import TradingMemory
 from processors.signal_processor import SignalProcessor
 
+# Import bot routes
+from api.routes.bots import router as bots_router
+from api.routes.health import router as health_router
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -46,6 +50,10 @@ app = FastAPI(
     description="Multi-Agent Trading Intelligence API",
     version="1.0.0"
 )
+
+# Include routers
+app.include_router(bots_router)
+app.include_router(health_router)
 
 # Initialize global components
 try:

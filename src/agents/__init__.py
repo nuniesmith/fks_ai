@@ -1,11 +1,7 @@
-"""Agent module exports"""
+"""Trading bot agents"""
+from .base_bot import BaseTradingBot
+from .stockbot import StockBot
+from .forexbot import ForexBot
+from .cryptobot import CryptoBot
 
-from .base import create_agent, create_structured_agent
-from .state import AgentState, create_initial_state
-
-__all__ = [
-    "AgentState",
-    "create_initial_state",
-    "create_agent",
-    "create_structured_agent"
-]
+__all__ = ["BaseTradingBot", "StockBot", "ForexBot", "CryptoBot"]

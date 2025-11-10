@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Annotated, Any, Dict, List, Optional, TypedDict
 
 
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
     """
     Shared state passed between agents in the trading graph.
 
@@ -23,6 +23,8 @@ class AgentState(TypedDict):
         final_decision: Manager's synthesized decision
         timestamp: Processing timestamp
         symbol: Trading pair being analyzed
+        consensus_signal: Consensus signal from bot aggregation (optional)
+        bot_signals: Individual bot signals grouped by type (optional)
     """
     messages: Annotated[list[dict[str, Any]], "add_messages"]
     market_data: dict[str, Any]
@@ -34,6 +36,8 @@ class AgentState(TypedDict):
     final_decision: Optional[dict[str, Any]]
     timestamp: str
     symbol: str
+    consensus_signal: Optional[dict[str, Any]]
+    bot_signals: Optional[dict[str, Any]]
 
 
 def create_initial_state(symbol: str, market_data: dict[str, Any]) -> AgentState:
