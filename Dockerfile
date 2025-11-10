@@ -4,6 +4,7 @@ FROM python:3.12-slim AS builder
 WORKDIR /app
 
 # Install build dependencies needed for TA-Lib, chromadb, sentence-transformers
+# TA-Lib needs additional dependencies for compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -20,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     automake \
     libtool \
     libc-bin \
+    file \
+    binutils \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip, setuptools, and wheel (better caching with BuildKit)
