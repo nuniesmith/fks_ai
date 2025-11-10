@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi-dev \
     libssl-dev \
     build-essential \
+    autoconf \
+    automake \
+    libtool \
     libc-bin \
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,15 +26,25 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade pip setuptools wheel
 
 # Install TA-Lib C library (required before installing Python TA-Lib package)
-# Note: TA-Lib configure script needs updated config files for modern systems
 RUN wget -q http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib/ && \
-    wget -q -O config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' && \
-    wget -q -O config.sub 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD' && \
-    ./configure --prefix=/usr || (echo "Configure failed, checking error..." && cat config.log && exit 1) && \
-    make -j$(nproc) || (echo "Make failed" && exit 1) && \
-    make install || (echo "Make install failed" && exit 1) && \
+    ls -la && \
+    if [ ! -f configure ]; then \
+        echo "Configure script not found, checking for autogen.sh..." && \
+        if [ -f autogen.sh ]; then \
+            chmod +x autogen.sh && ./autogen.sh; \
+        elif [ -f bootstrap ]; then \
+            chmod +x bootstrap && ./bootstrap; \
+        else \
+            echo "No configure, autogen.sh, or bootstrap found. Running autoreconf..." && \
+            autoreconf -fvi; \
+        fi; \
+    fi && \
+    chmod +x configure && \
+    ./configure --prefix=/usr || (echo "=== Configure failed ===" && ls -la && cat config.log 2>/dev/null || echo "No config.log" && exit 1) && \
+    make -j$(nproc) || (echo "=== Make failed ===" && exit 1) && \
+    make install || (echo "=== Make install failed ===" && exit 1) && \
     cd .. && \
     rm -rf ta-lib ta-lib-0.4.0-src.tar.gz && \
     ldconfig
