@@ -26,35 +26,58 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade pip setuptools wheel
 
 # Install TA-Lib C library (required before installing Python TA-Lib package)
-RUN wget -q http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
-    tar -xzf ta-lib-0.4.0-src.tar.gz && \
-    cd ta-lib/ && \
-    ls -la && \
-    if [ ! -f configure ]; then \
-        echo "Configure script not found, checking for autogen.sh..." && \
-        if [ -f autogen.sh ]; then \
-            chmod +x autogen.sh && ./autogen.sh; \
-        elif [ -f bootstrap ]; then \
-            chmod +x bootstrap && ./bootstrap; \
+# TA-Lib source includes configure script, but it may need updated config files for modern systems
+RUN set -eux; \
+    wget -q http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz -O /tmp/ta-lib.tar.gz || \
+    wget -q https://sourceforge.net/projects/ta-lib/files/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz/download -O /tmp/ta-lib.tar.gz; \
+    tar -xzf /tmp/ta-lib.tar.gz -C /tmp; \
+    cd /tmp/ta-lib; \
+    echo "=== Listing TA-Lib source files ==="; \
+    ls -la; \
+    echo "=== Checking for configure script ==="; \
+    if [ -f configure ]; then \
+        echo "Configure script found"; \
+        chmod +x configure; \
+    elif [ -f configure.ac ] || [ -f configure.in ]; then \
+        echo "Configure.ac/in found, generating configure..."; \
+        autoreconf -fvi || (echo "autoreconf failed, trying autogen.sh..." && [ -f autogen.sh ] && chmod +x autogen.sh && ./autogen.sh || true); \
+        chmod +x configure 2>/dev/null || true; \
+    else \
+        echo "No configure or configure.ac/in found, listing all files:"; \
+        find . -type f -name "configure*" -o -name "Makefile*" -o -name "*.ac" -o -name "*.in" | head -20; \
+        echo "Trying to build with existing Makefile..."; \
+        if [ -f Makefile ]; then \
+            make -j$(nproc) && make install; \
         else \
-            echo "No configure, autogen.sh, or bootstrap found. Running autoreconf..." && \
-            autoreconf -fvi; \
+            echo "ERROR: No configure script or Makefile found"; \
+            exit 1; \
         fi; \
-    fi && \
-    chmod +x configure && \
-    ./configure --prefix=/usr || (echo "=== Configure failed ===" && ls -la && cat config.log 2>/dev/null || echo "No config.log" && exit 1) && \
-    make -j$(nproc) || (echo "=== Make failed ===" && exit 1) && \
-    make install || (echo "=== Make install failed ===" && exit 1) && \
-    cd .. && \
-    rm -rf ta-lib ta-lib-0.4.0-src.tar.gz && \
-    ldconfig
+    fi; \
+    if [ -f configure ]; then \
+        echo "=== Running configure ==="; \
+        ./configure --prefix=/usr 2>&1 | tee /tmp/configure.log || \
+        (echo "=== Configure failed, showing log ===" && cat /tmp/configure.log && \
+         echo "=== Directory contents ===" && ls -la && \
+         echo "=== Checking for config.log ===" && [ -f config.log ] && cat config.log || echo "No config.log found" && \
+         exit 1); \
+        echo "=== Building TA-Lib ==="; \
+        make -j$(nproc) 2>&1 | tee /tmp/make.log || \
+        (echo "=== Make failed, showing last 50 lines ===" && tail -50 /tmp/make.log && exit 1); \
+        echo "=== Installing TA-Lib ==="; \
+        make install 2>&1 || (echo "=== Make install failed ===" && exit 1); \
+    fi; \
+    cd /; \
+    rm -rf /tmp/ta-lib /tmp/ta-lib.tar.gz; \
+    ldconfig; \
+    echo "=== TA-Lib installation complete ==="
 
 # Copy dependency files (for better layer caching)
 COPY requirements.txt ./
 
 # Install Python dependencies with BuildKit cache mount
+# Use --no-cache-dir to reduce disk usage in CI
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --user --no-warn-script-location -r requirements.txt
+    python -m pip install --user --no-warn-script-location --no-cache-dir -r requirements.txt
 
 # Runtime stage
 FROM python:3.12-slim
