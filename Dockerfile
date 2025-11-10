@@ -5,6 +5,7 @@ WORKDIR /app
 
 # Install build dependencies needed for TA-Lib, chromadb, sentence-transformers
 # TA-Lib needs additional dependencies for compilation
+# Clean up apt cache immediately to save disk space
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -23,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libc-bin \
     file \
     binutils \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* /var/tmp/*
 
 # Upgrade pip, setuptools, and wheel (better caching with BuildKit)
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -54,10 +55,8 @@ RUN set -e; \
         exit 1; \
     fi; \
     echo "=== Extracting TA-Lib ==="; \
-    tar -xzf /tmp/ta-lib.tar.gz -C /tmp; \
+    tar -xzf /tmp/ta-lib.tar.gz -C /tmp && rm -f /tmp/ta-lib.tar.gz; \
     cd /tmp/$TA_LIB_DIR; \
-    echo "=== Listing TA-Lib source files ==="; \
-    ls -la; \
     echo "=== Checking for configure script ==="; \
     if [ -f configure ]; then \
         echo "Configure script found"; \
@@ -74,46 +73,33 @@ RUN set -e; \
         fi; \
     else \
         echo "ERROR: No configure script or configure.ac/in found"; \
-        echo "Listing relevant files:"; \
-        find . -maxdepth 2 -type f \( -name "configure*" -o -name "Makefile*" -o -name "*.ac" -o -name "*.in" \) 2>/dev/null | head -20; \
         exit 1; \
     fi; \
     echo "=== Running configure ==="; \
-    # Show configure output in real-time and save to log
-    if ! ./configure --prefix=/usr 2>&1 | tee /tmp/configure.log; then \
+    if ! ./configure --prefix=/usr > /tmp/configure.log 2>&1; then \
         echo "=== Configure failed ==="; \
-        echo "Configure output:"; \
         cat /tmp/configure.log; \
-        if [ -f config.log ]; then \
-            echo "=== config.log (last 100 lines) ==="; \
-            tail -100 config.log; \
-        fi; \
+        [ -f config.log ] && tail -50 config.log || true; \
         exit 1; \
     fi; \
-    echo "=== Configure successful ==="; \
     echo "=== Building TA-Lib ==="; \
-    # Build with fewer parallel jobs to avoid memory issues and show output
-    # Use -j2 instead of -j$(nproc) to be more conservative
-    if ! make -j2 2>&1 | tee /tmp/make.log; then \
+    # Build with single job to minimize memory and disk usage
+    if ! make -j1 > /tmp/make.log 2>&1; then \
         echo "=== Make failed ==="; \
-        echo "Full make output:"; \
-        cat /tmp/make.log; \
-        if [ -f config.log ]; then \
-            echo "=== config.log (last 50 lines) ==="; \
-            tail -50 config.log; \
-        fi; \
+        tail -100 /tmp/make.log; \
         exit 1; \
     fi; \
     echo "=== Installing TA-Lib ==="; \
     if ! make install > /tmp/install.log 2>&1; then \
         echo "=== Make install failed ==="; \
-        echo "Install output:"; \
         cat /tmp/install.log; \
         exit 1; \
     fi; \
     cd /; \
-    rm -rf /tmp/$TA_LIB_DIR /tmp/ta-lib.tar.gz; \
+    rm -rf /tmp/$TA_LIB_DIR /tmp/*.log /tmp/ta-lib*; \
     ldconfig; \
+    # Clean up any remaining build artifacts
+    find /tmp -type f -name "*.o" -o -name "*.a" -o -name "*.log" 2>/dev/null | xargs rm -f || true; \
     echo "=== TA-Lib installation complete ==="
 
 # Copy dependency files (for better layer caching)
@@ -121,8 +107,11 @@ COPY requirements.txt ./
 
 # Install Python dependencies with BuildKit cache mount
 # Use --no-cache-dir to reduce disk usage in CI
+# Clean up pip cache after installation to free disk space
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --user --no-warn-script-location --no-cache-dir -r requirements.txt
+    python -m pip install --user --no-warn-script-location --no-cache-dir -r requirements.txt \
+    && python -m pip cache purge || true \
+    && rm -rf /root/.cache/pip/* /tmp/pip-* 2>/dev/null || true
 
 # Runtime stage
 FROM python:3.12-slim
