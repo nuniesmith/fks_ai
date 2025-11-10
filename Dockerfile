@@ -79,16 +79,18 @@ RUN set -e; \
         exit 1; \
     fi; \
     echo "=== Running configure ==="; \
-    if ! ./configure --prefix=/usr > /tmp/configure.log 2>&1; then \
+    # Show configure output in real-time and save to log
+    if ! ./configure --prefix=/usr 2>&1 | tee /tmp/configure.log; then \
         echo "=== Configure failed ==="; \
         echo "Configure output:"; \
         cat /tmp/configure.log; \
         if [ -f config.log ]; then \
-            echo "=== config.log ==="; \
+            echo "=== config.log (last 100 lines) ==="; \
             tail -100 config.log; \
         fi; \
         exit 1; \
     fi; \
+    echo "=== Configure successful ==="; \
     echo "=== Building TA-Lib ==="; \
     # Build with fewer parallel jobs to avoid memory issues and show output
     # Use -j2 instead of -j$(nproc) to be more conservative
