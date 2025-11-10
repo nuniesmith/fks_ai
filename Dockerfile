@@ -22,16 +22,18 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade pip setuptools wheel
 
 # Install TA-Lib C library (required before installing Python TA-Lib package)
-RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
+# Note: TA-Lib configure script needs updated config files for modern systems
+RUN wget -q http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib/ && \
     wget -q -O config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' && \
     wget -q -O config.sub 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD' && \
-    ./configure --prefix=/usr && \
-    make && \
-    make install && \
+    ./configure --prefix=/usr || (echo "Configure failed, checking error..." && cat config.log && exit 1) && \
+    make -j$(nproc) || (echo "Make failed" && exit 1) && \
+    make install || (echo "Make install failed" && exit 1) && \
     cd .. && \
-    rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
+    rm -rf ta-lib ta-lib-0.4.0-src.tar.gz && \
+    ldconfig
 
 # Copy dependency files (for better layer caching)
 COPY requirements.txt ./
