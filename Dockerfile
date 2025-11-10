@@ -27,52 +27,82 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade pip setuptools wheel
 
 # Install TA-Lib C library (required before installing Python TA-Lib package)
-# Try multiple download sources and methods
-RUN echo "=== Downloading TA-Lib ===" && \
-    (wget -q --timeout=30 --tries=3 http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz -O /tmp/ta-lib.tar.gz 2>&1 || \
-     wget -q --timeout=30 --tries=3 https://sourceforge.net/projects/ta-lib/files/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz/download -O /tmp/ta-lib.tar.gz 2>&1 || \
-     curl -L -o /tmp/ta-lib.tar.gz https://sourceforge.net/projects/ta-lib/files/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz/download 2>&1 || \
-     (echo "ERROR: All download methods failed" && exit 1)) && \
-    echo "=== Extracting TA-Lib ===" && \
-    tar -xzf /tmp/ta-lib.tar.gz -C /tmp && \
-    cd /tmp/ta-lib && \
-    echo "=== Listing TA-Lib source files ===" && \
-    ls -la && \
-    echo "=== Checking for configure script ===" && \
+# Use GitHub mirror as primary source (more reliable than SourceForge)
+RUN set -e; \
+    echo "=== Downloading TA-Lib ==="; \
+    TA_LIB_DOWNLOADED=0; \
+    # Try GitHub mirror first (most reliable)
+    if wget -q --timeout=30 --tries=2 -O /tmp/ta-lib.tar.gz https://github.com/TA-Lib/ta-lib/archive/refs/tags/v0.4.0.tar.gz 2>&1; then \
+        echo "Downloaded from GitHub mirror"; \
+        TA_LIB_DOWNLOADED=1; \
+        TA_LIB_DIR="ta-lib-0.4.0"; \
+    elif wget -q --timeout=30 --tries=2 -O /tmp/ta-lib.tar.gz http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz 2>&1; then \
+        echo "Downloaded from SourceForge primary"; \
+        TA_LIB_DOWNLOADED=1; \
+        TA_LIB_DIR="ta-lib"; \
+    elif curl -f -L --connect-timeout 30 --max-time 120 -o /tmp/ta-lib.tar.gz https://sourceforge.net/projects/ta-lib/files/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz/download 2>&1; then \
+        echo "Downloaded from SourceForge via curl"; \
+        TA_LIB_DOWNLOADED=1; \
+        TA_LIB_DIR="ta-lib"; \
+    fi; \
+    if [ "$TA_LIB_DOWNLOADED" -eq 0 ]; then \
+        echo "ERROR: All download methods failed"; \
+        echo "Attempted: GitHub mirror, SourceForge primary, SourceForge curl"; \
+        exit 1; \
+    fi; \
+    echo "=== Extracting TA-Lib ==="; \
+    tar -xzf /tmp/ta-lib.tar.gz -C /tmp; \
+    cd /tmp/$TA_LIB_DIR; \
+    echo "=== Listing TA-Lib source files ==="; \
+    ls -la; \
+    echo "=== Checking for configure script ==="; \
     if [ -f configure ]; then \
-        echo "Configure script found" && \
+        echo "Configure script found"; \
         chmod +x configure; \
     elif [ -f configure.ac ] || [ -f configure.in ]; then \
-        echo "Configure.ac/in found, generating configure..." && \
-        autoreconf -fvi 2>&1 || (echo "autoreconf failed, trying autogen.sh..." && [ -f autogen.sh ] && chmod +x autogen.sh && ./autogen.sh 2>&1 || echo "autogen.sh also failed"); \
-        [ -f configure ] && chmod +x configure || echo "Configure script still not found after autoreconf"; \
+        echo "Configure.ac/in found, generating configure..."; \
+        autoreconf -fvi 2>&1 || (echo "autoreconf failed, trying autogen.sh..." && [ -f autogen.sh ] && chmod +x autogen.sh && ./autogen.sh 2>&1 || true); \
+        if [ -f configure ]; then \
+            chmod +x configure; \
+            echo "Configure script generated successfully"; \
+        else \
+            echo "ERROR: Configure script generation failed"; \
+            exit 1; \
+        fi; \
     else \
-        echo "No configure or configure.ac/in found, listing relevant files:" && \
+        echo "ERROR: No configure script or configure.ac/in found"; \
+        echo "Listing relevant files:"; \
         find . -maxdepth 2 -type f \( -name "configure*" -o -name "Makefile*" -o -name "*.ac" -o -name "*.in" \) 2>/dev/null | head -20; \
-    fi && \
-    if [ ! -f configure ]; then \
-        echo "ERROR: Configure script not found and could not be generated" && \
-        echo "Directory contents:" && ls -la && \
         exit 1; \
-    fi && \
-    echo "=== Running configure ===" && \
-    ./configure --prefix=/usr 2>&1 | tee /tmp/configure.log || \
-    (echo "=== Configure failed ===" && \
-     echo "Configure log:" && cat /tmp/configure.log 2>/dev/null || echo "No configure.log" && \
-     echo "=== Directory contents ===" && ls -la && \
-     [ -f config.log ] && (echo "=== config.log ===" && cat config.log) || echo "No config.log found" && \
-     exit 1) && \
-    echo "=== Building TA-Lib ===" && \
-    make -j$(nproc) 2>&1 | tee /tmp/make.log || \
-    (echo "=== Make failed ===" && \
-     echo "Last 50 lines of make.log:" && tail -50 /tmp/make.log 2>/dev/null || echo "No make.log" && \
-     exit 1) && \
-    echo "=== Installing TA-Lib ===" && \
-    make install 2>&1 || \
-    (echo "=== Make install failed ===" && exit 1) && \
-    cd / && \
-    rm -rf /tmp/ta-lib /tmp/ta-lib.tar.gz && \
-    ldconfig && \
+    fi; \
+    echo "=== Running configure ==="; \
+    if ! ./configure --prefix=/usr > /tmp/configure.log 2>&1; then \
+        echo "=== Configure failed ==="; \
+        echo "Configure output:"; \
+        cat /tmp/configure.log; \
+        if [ -f config.log ]; then \
+            echo "=== config.log ==="; \
+            tail -100 config.log; \
+        fi; \
+        exit 1; \
+    fi; \
+    echo "=== Building TA-Lib ==="; \
+    if ! make -j$(nproc) > /tmp/make.log 2>&1; then \
+        echo "=== Make failed ==="; \
+        echo "Last 100 lines of make.log:"; \
+        tail -100 /tmp/make.log; \
+        exit 1; \
+    fi; \
+    echo "=== Installing TA-Lib ==="; \
+    if ! make install > /tmp/install.log 2>&1; then \
+        echo "=== Make install failed ==="; \
+        echo "Install output:"; \
+        cat /tmp/install.log; \
+        exit 1; \
+    fi; \
+    cd /; \
+    rm -rf /tmp/$TA_LIB_DIR /tmp/ta-lib.tar.gz; \
+    ldconfig; \
     echo "=== TA-Lib installation complete ==="
 
 # Copy dependency files (for better layer caching)
