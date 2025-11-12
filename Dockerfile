@@ -24,7 +24,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     SERVICE_NAME=fks_ai \
     SERVICE_PORT=8007 \
-    PYTHONPATH=/app/src:/app \
+    PYTHONPATH=/app/src:/app:/home/appuser/.local/lib/python3.12/site-packages \
+    PYTHONUSERBASE=/home/appuser/.local \
     PATH=/home/appuser/.local/bin:$PATH
 
 WORKDIR /app
@@ -39,7 +40,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -u 1000 -m -s /bin/bash appuser
 
 # Copy TA-Lib libraries from builder (needed at runtime)
-COPY --from=builder /usr/lib/libta_lib.so* /usr/lib/ || true
+# Note: Files may not exist if base image doesn't have TA-Lib installed
+RUN --mount=type=bind,from=builder,source=/usr/lib,target=/tmp/ta-lib \
+    sh -c 'if ls /tmp/ta-lib/libta_lib.so* 1> /dev/null 2>&1; then cp /tmp/ta-lib/libta_lib.so* /usr/lib/; fi' || true
 
 # Copy Python packages from builder with correct ownership
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
