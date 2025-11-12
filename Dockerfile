@@ -1,113 +1,15 @@
 # Multi-stage build for fks_ai Python service
-FROM python:3.12-slim AS builder
+# Uses ML base image with LangChain, ChromaDB, and sentence-transformers pre-installed
+FROM nuniesmith/fks:docker-ml AS builder
 
 WORKDIR /app
 
-# Install build dependencies needed for TA-Lib, chromadb, sentence-transformers
-# TA-Lib needs additional dependencies for compilation
-# Clean up apt cache immediately to save disk space
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    make \
-    wget \
-    curl \
-    cmake \
-    git \
-    pkg-config \
-    libffi-dev \
-    libssl-dev \
-    build-essential \
-    autoconf \
-    automake \
-    libtool \
-    libc-bin \
-    file \
-    binutils \
-    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* /var/tmp/*
-
-# Upgrade pip, setuptools, and wheel (better caching with BuildKit)
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --upgrade pip setuptools wheel
-
-# Install TA-Lib C library (required before installing Python TA-Lib package)
-# Use GitHub mirror as primary source (more reliable than SourceForge)
-RUN set -e; \
-    echo "=== Downloading TA-Lib ==="; \
-    TA_LIB_DOWNLOADED=0; \
-    # Try GitHub mirror first (most reliable)
-    if wget -q --timeout=30 --tries=2 -O /tmp/ta-lib.tar.gz https://github.com/TA-Lib/ta-lib/archive/refs/tags/v0.4.0.tar.gz 2>&1; then \
-        echo "Downloaded from GitHub mirror"; \
-        TA_LIB_DOWNLOADED=1; \
-        TA_LIB_DIR="ta-lib-0.4.0"; \
-    elif wget -q --timeout=30 --tries=2 -O /tmp/ta-lib.tar.gz http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz 2>&1; then \
-        echo "Downloaded from SourceForge primary"; \
-        TA_LIB_DOWNLOADED=1; \
-        TA_LIB_DIR="ta-lib"; \
-    elif curl -f -L --connect-timeout 30 --max-time 120 -o /tmp/ta-lib.tar.gz https://sourceforge.net/projects/ta-lib/files/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz/download 2>&1; then \
-        echo "Downloaded from SourceForge via curl"; \
-        TA_LIB_DOWNLOADED=1; \
-        TA_LIB_DIR="ta-lib"; \
-    fi; \
-    if [ "$TA_LIB_DOWNLOADED" -eq 0 ]; then \
-        echo "ERROR: All download methods failed"; \
-        echo "Attempted: GitHub mirror, SourceForge primary, SourceForge curl"; \
-        exit 1; \
-    fi; \
-    echo "=== Extracting TA-Lib ==="; \
-    tar -xzf /tmp/ta-lib.tar.gz -C /tmp && rm -f /tmp/ta-lib.tar.gz; \
-    cd /tmp/$TA_LIB_DIR; \
-    echo "=== Checking for configure script ==="; \
-    if [ -f configure ]; then \
-        echo "Configure script found"; \
-        chmod +x configure; \
-    elif [ -f configure.ac ] || [ -f configure.in ]; then \
-        echo "Configure.ac/in found, generating configure..."; \
-        autoreconf -fvi 2>&1 || (echo "autoreconf failed, trying autogen.sh..." && [ -f autogen.sh ] && chmod +x autogen.sh && ./autogen.sh 2>&1 || true); \
-        if [ -f configure ]; then \
-            chmod +x configure; \
-            echo "Configure script generated successfully"; \
-        else \
-            echo "ERROR: Configure script generation failed"; \
-            exit 1; \
-        fi; \
-    else \
-        echo "ERROR: No configure script or configure.ac/in found"; \
-        exit 1; \
-    fi; \
-    echo "=== Running configure ==="; \
-    if ! ./configure --prefix=/usr > /tmp/configure.log 2>&1; then \
-        echo "=== Configure failed ==="; \
-        cat /tmp/configure.log; \
-        [ -f config.log ] && tail -50 config.log || true; \
-        exit 1; \
-    fi; \
-    echo "=== Building TA-Lib ==="; \
-    # Build with single job to minimize memory and disk usage
-    if ! make -j1 > /tmp/make.log 2>&1; then \
-        echo "=== Make failed ==="; \
-        tail -100 /tmp/make.log; \
-        exit 1; \
-    fi; \
-    echo "=== Installing TA-Lib ==="; \
-    if ! make install > /tmp/install.log 2>&1; then \
-        echo "=== Make install failed ==="; \
-        cat /tmp/install.log; \
-        exit 1; \
-    fi; \
-    cd /; \
-    rm -rf /tmp/$TA_LIB_DIR /tmp/*.log /tmp/ta-lib*; \
-    ldconfig; \
-    # Clean up any remaining build artifacts
-    find /tmp -type f -name "*.o" -o -name "*.a" -o -name "*.log" 2>/dev/null | xargs rm -f || true; \
-    echo "=== TA-Lib installation complete ==="
-
-# Copy dependency files (for better layer caching)
+# ML packages (langchain, chromadb, sentence-transformers, ollama, TA-Lib) are already installed in base
+# Just install service-specific packages
 COPY requirements.txt ./
 
 # Install Python dependencies with BuildKit cache mount
 # Use --no-cache-dir to reduce disk usage in CI
-# Clean up pip cache after installation to free disk space
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --user --no-warn-script-location --no-cache-dir -r requirements.txt \
     && python -m pip cache purge || true \
@@ -137,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -u 1000 -m -s /bin/bash appuser
 
 # Copy TA-Lib libraries from builder (needed at runtime)
-COPY --from=builder /usr/lib/libta_lib.so* /usr/lib/
+COPY --from=builder /usr/lib/libta_lib.so* /usr/lib/ || true
 
 # Copy Python packages from builder with correct ownership
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local

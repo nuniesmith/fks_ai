@@ -1,26 +1,23 @@
+# FastAPI and web framework
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 pydantic>=2.9.0
 
-# LangChain/LangGraph for multi-agent system
-langchain>=0.3.0
+# Note: The following packages are already installed in the ML base image (nuniesmith/fks:docker-ml):
+# - langchain>=0.3.0,<0.4.0
+# - langchain-core>=0.3.0,<0.4.0
+# - langchain-community>=0.3.0,<0.4.0
+# - langchain-ollama>=0.2.0,<1.0.0
+# - chromadb>=0.4.0,<1.0.0
+# - sentence-transformers>=2.2.0,<6.0.0
+# - ollama>=0.1.0,<1.0.0
+# - TA-Lib>=0.4.28
+# - numpy>=1.26.0,<2.0.0
+# - pandas>=2.2.0
+# - httpx>=0.25.0,<0.29.0
+
+# LangGraph (not in base image)
 langgraph>=0.2.0
-langchain-core>=0.3.0
-langchain-community>=0.3.0
-langchain-ollama>=0.2.0
-
-# Ollama integration
-ollama>=0.3.0
-
-# Vector store & memory
-chromadb>=0.5.0
-sentence-transformers>=3.0.0
-
-# Utilities
-numpy>=1.26.0
-pandas>=2.2.0
-httpx>=0.25.0
-TA-Lib>=0.4.28
 
 # Testing
 pytest>=7.4.0
