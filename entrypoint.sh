@@ -11,7 +11,7 @@ HOST=${HOST:-0.0.0.0}
 echo "Starting ${SERVICE_NAME} on ${HOST}:${SERVICE_PORT}"
 
 # Run the service
-exec uvicorn src.main:app \
+exec python -m uvicorn src.main:app \
     --host "${HOST}" \
     --port "${SERVICE_PORT}" \
     --no-access-log \
