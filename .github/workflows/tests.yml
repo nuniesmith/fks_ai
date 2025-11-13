@@ -54,12 +54,15 @@ jobs:
           fi
 
       - name: Upload coverage to Codecov
+        if: always() && hashFiles('coverage.xml') != ''
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
           flags: ${{ env.SERVICE_NAME }}
           name: ${{ env.SERVICE_NAME }}-coverage
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
 
   docker:
     runs-on: ubuntu-latest

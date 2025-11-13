@@ -46,10 +46,13 @@ jobs:
           fi
 
       - name: Upload coverage
+        if: always() && hashFiles('coverage.xml') != ''
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
 
   build-and-push:
     needs: test
