@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: nuniesmith/fks_ai:latest
+    image: nuniesmith/fks:ai-latest
     container_name: fks_ai
     ports:
       - "8007:8007"
