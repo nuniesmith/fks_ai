@@ -22,6 +22,7 @@ jobs:
       python_version: '3.12'
       has_dev_requirements: true
       run_mypy: true
+      cleanup_disk: true
     secrets:
       docker_token: ${{ secrets.DOCKER_TOKEN }}
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
