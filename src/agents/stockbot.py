@@ -121,7 +121,7 @@ class StockBot(BaseTradingBot):
             confidence += 0.2
         
         # Generate signal
-        if confidence >= 0.6:
+        if confidence >= 0.65:  # Updated Day 47: increased from 0.6 to 0.65 based on performance analysis
             entry_price = float(current_price)
             stop_loss = entry_price * 0.98  # 2% stop
             take_profit = entry_price * 1.05  # 5% target

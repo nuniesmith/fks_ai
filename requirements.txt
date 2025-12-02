@@ -19,7 +19,21 @@ pydantic>=2.9.0
 # LangGraph (not in base image)
 langgraph>=0.2.0
 
+# Timezone support
+pytz>=2024.1
+
+# Computer Vision dependencies
+torchvision>=0.16.0
+ultralytics>=8.0.0  # YOLOv8
+mplfinance>=0.12.9b0  # Candlestick charts
+opencv-python>=4.8.0
+Pillow>=10.0.0  # Image processing
+
 # Testing
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 pytest-cov>=4.1.0
+
+# Prometheus metrics
+prometheus-fastapi-instrumentator>=6.1.0
+prometheus-client>=0.20.0
