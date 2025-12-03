@@ -30,30 +30,27 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Set up standardized Prometheus metrics
+# Set up standardized Prometheus metrics with fks_build_info
 try:
-    import sys
-    # Try to import from fks_api framework (if available)
-    api_framework_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'api', 'src')
-    if os.path.exists(api_framework_path) and api_framework_path not in sys.path:
-        sys.path.insert(0, api_framework_path)
+    from prometheus_client import CollectorRegistry, Gauge, generate_latest
+    from fastapi.responses import PlainTextResponse
     
-    try:
-        from framework.middleware.prometheus_metrics import setup_prometheus_metrics
-        setup_prometheus_metrics(
-            app,
-            service_name="fks_ai",
-            version="1.0.0",
-            commit=os.getenv("GIT_COMMIT", os.getenv("COMMIT_SHA")),
-            build_date=os.getenv("BUILD_DATE", os.getenv("BUILD_TIMESTAMP")),
-            enable_http_metrics=True,
-            enable_process_metrics=True,
+    _metrics_registry = CollectorRegistry()
+    _build_info = Gauge(
+        "fks_build_info",
+        "Build information for the service",
+        ["service", "version"],
+        registry=_metrics_registry,
+    )
+    _build_info.labels(service="fks_ai", version="1.0.0").set(1)
+    
+    @app.get("/metrics", response_class=PlainTextResponse, include_in_schema=False)
+    async def metrics_endpoint():
+        return PlainTextResponse(
+            generate_latest(_metrics_registry).decode("utf-8"),
+            media_type="text/plain; version=0.0.4; charset=utf-8"
         )
-    except ImportError:
-        # Fallback: use prometheus_client directly if framework not available
-        from prometheus_client import make_asgi_app
-        metrics_app = make_asgi_app()
-        app.mount("/metrics", metrics_app)
+    logger.info("✅ Prometheus metrics with fks_build_info registered")
 except Exception as e:
     logger.warning(f"Could not set up Prometheus metrics: {e}")
 
@@ -87,6 +84,28 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Computer vision endpoints not available: {e}")
     VISION_AVAILABLE = False
+
+# Try to include LLM routes (LiteLLM unified interface)
+LLM_ROUTES_AVAILABLE = False
+try:
+    from api.llm_routes import router as llm_router
+    app.include_router(llm_router)
+    logger.info("✅ LLM routes loaded (LiteLLM unified interface)")
+    LLM_ROUTES_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"⚠️ LLM routes not available: {e}")
+    LLM_ROUTES_AVAILABLE = False
+
+# Try to include AI trading analysis routes (LiteLLM-powered trading decisions)
+TRADING_ANALYSIS_AVAILABLE = False
+try:
+    from api.trading_analysis import router as trading_router
+    app.include_router(trading_router)
+    logger.info("✅ AI trading analysis routes loaded")
+    TRADING_ANALYSIS_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"⚠️ AI trading analysis routes not available: {e}")
+    TRADING_ANALYSIS_AVAILABLE = False
 
 # Try to include advanced API routes if available (full multi-agent system)
 ADVANCED_ROUTES_AVAILABLE = False
@@ -193,13 +212,19 @@ async def health_check():
         "signal_enhancement_available": SIGNAL_ENHANCEMENT_AVAILABLE,
         "advanced_routes_available": ADVANCED_ROUTES_AVAILABLE,
         "vision_available": VISION_AVAILABLE,
+        "llm_routes_available": LLM_ROUTES_AVAILABLE,
         "endpoints": {
             "/health": "Service health check",
             "/ai/enhance-signal": "Signal enhancement (always available)" if SIGNAL_ENHANCEMENT_AVAILABLE else "Not available",
             "/ai/analyze": "Full multi-agent analysis" if ADVANCED_ROUTES_AVAILABLE else "Not available",
             "/ai/debate": "Bull/Bear debate" if ADVANCED_ROUTES_AVAILABLE else "Not available",
             "/ai/vision/render": "Render candlestick chart" if VISION_AVAILABLE else "Not available",
-            "/ai/vision/detect-patterns": "Detect chart patterns" if VISION_AVAILABLE else "Not available"
+            "/ai/vision/detect-patterns": "Detect chart patterns" if VISION_AVAILABLE else "Not available",
+            "/llm/health": "LLM health check" if LLM_ROUTES_AVAILABLE else "Not available",
+            "/llm/config": "Get LLM config" if LLM_ROUTES_AVAILABLE else "Not available",
+            "/llm/models": "List available models" if LLM_ROUTES_AVAILABLE else "Not available",
+            "/llm/switch": "Switch LLM model" if LLM_ROUTES_AVAILABLE else "Not available",
+            "/llm/chat": "Chat with LLM" if LLM_ROUTES_AVAILABLE else "Not available",
         }
     })
 
