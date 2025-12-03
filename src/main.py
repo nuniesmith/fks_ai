@@ -107,6 +107,17 @@ except Exception as e:
     logger.warning(f"⚠️ AI trading analysis routes not available: {e}")
     TRADING_ANALYSIS_AVAILABLE = False
 
+# Try to include Rules Engine routes (FKS Trading Framework)
+RULES_ENGINE_AVAILABLE = False
+try:
+    from api.routes.rules import router as rules_router
+    app.include_router(rules_router)
+    logger.info("✅ Rules engine routes loaded (FKS Trading Framework)")
+    RULES_ENGINE_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"⚠️ Rules engine routes not available: {e}")
+    RULES_ENGINE_AVAILABLE = False
+
 # Try to include advanced API routes if available (full multi-agent system)
 ADVANCED_ROUTES_AVAILABLE = False
 try:
@@ -213,6 +224,7 @@ async def health_check():
         "advanced_routes_available": ADVANCED_ROUTES_AVAILABLE,
         "vision_available": VISION_AVAILABLE,
         "llm_routes_available": LLM_ROUTES_AVAILABLE,
+        "rules_engine_available": RULES_ENGINE_AVAILABLE,
         "endpoints": {
             "/health": "Service health check",
             "/ai/enhance-signal": "Signal enhancement (always available)" if SIGNAL_ENHANCEMENT_AVAILABLE else "Not available",
@@ -225,6 +237,10 @@ async def health_check():
             "/llm/models": "List available models" if LLM_ROUTES_AVAILABLE else "Not available",
             "/llm/switch": "Switch LLM model" if LLM_ROUTES_AVAILABLE else "Not available",
             "/llm/chat": "Chat with LLM" if LLM_ROUTES_AVAILABLE else "Not available",
+            "/rules/validate": "Validate trade signal" if RULES_ENGINE_AVAILABLE else "Not available",
+            "/rules/gates/{market}": "Check market gates" if RULES_ENGINE_AVAILABLE else "Not available",
+            "/rules/rules/hard": "List hard rules" if RULES_ENGINE_AVAILABLE else "Not available",
+            "/rules/rules/soft": "List soft rules" if RULES_ENGINE_AVAILABLE else "Not available",
         }
     })
 

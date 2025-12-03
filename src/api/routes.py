@@ -39,6 +39,7 @@ from processors.signal_processor import SignalProcessor
 # Import bot routes
 from api.routes.bots import router as bots_router
 from api.routes.health import router as health_router
+from api.routes.batch import router as batch_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +55,7 @@ app = FastAPI(
 # Include routers
 app.include_router(bots_router)
 app.include_router(health_router)
+app.include_router(batch_router)
 
 # Initialize global components
 try:
